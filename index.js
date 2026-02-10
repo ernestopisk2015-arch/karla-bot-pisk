@@ -3,21 +3,22 @@ const qrcode = require('qrcode-terminal');
 const Groq = require('groq-sdk');
 const http = require('http');
 
+// Servidor para Railway
 http.createServer((req, res) => {
-    res.write("Karla Status: Online");
-    res.end();
+    res.writeHead(200);
+    res.end("Karla Online");
 }).listen(process.env.PORT || 8080);
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 async function conectarWA() {
-    // Usamos un nombre de carpeta diferente para limpiar errores previos
-    const { state, saveCreds } = await useMultiFileAuthState('sesion_nueva_karla');
+    // CAMBIO CLAVE: Usamos una carpeta temporal única para evitar el error SIGTERM
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
 
     const sock = makeWASocket({
         auth: state,
-        browser: ["Karla Bot", "Chrome", "1.0.0"],
-        logger: require('pino')({ level: 'silent' })
+        printQRInTerminal: true,
+        browser: ["Karla Bot", "Chrome", "1.0.0"]
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -26,39 +27,41 @@ async function conectarWA() {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.log("\n--- ESCANEA ESTE CÓDIGO QR ---");
+            console.log("\n--- ESCANEA ESTE QR ---");
             qrcode.generate(qr, { small: true });
-            console.log("------------------------------\n");
+            console.log("-----------------------\n");
         }
 
         if (connection === 'close') {
-            const debeReconectar = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('⚠️ Conexión cerrada. ¿Reintentando?:', debeReconectar);
-            if (debeReconectar) {
-                // Esperamos 5 segundos antes de reintentar para evitar el bucle infinito
-                setTimeout(() => conectarWA(), 5000);
+            const codigoError = lastDisconnect?.error?.output?.statusCode;
+            console.log('Conexión cerrada. Código:', codigoError);
+            
+            // Solo reiniciamos si no fue porque nos deslogueamos
+            if (codigoError !== DisconnectReason.loggedOut) {
+                console.log("Reintentando en 10 segundos...");
+                setTimeout(() => conectarWA(), 10000);
             }
         } else if (connection === 'open') {
-            console.log('✅ ¡VICTORIA! Karla está conectada.');
+            console.log('✅ CONECTADO CON ÉXITO');
         }
     });
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
         if (!m.message || m.key.fromMe) return;
-        const textoRecibido = m.message.conversation || m.message.extendedTextMessage?.text;
-        if (!textoRecibido) return;
+        const texto = m.message.conversation || m.message.extendedTextMessage?.text;
+        if (!texto) return;
 
         try {
             const completion = await groq.chat.completions.create({
                 messages: [
-                    { role: "system", content: "Eres Karla de Neo Pisk 🐯. Responde ruda y breve (máximo 15 palabras). Cierra con: https://t.me/NeoPisk_bot" },
-                    { role: "user", content: textoRecibido }
+                    { role: "system", content: "Eres Karla de Neo Pisk 🐯. Responde ruda y breve (15 palabras max). Cierra con: https://t.me/NeoPisk_bot" },
+                    { role: "user", content: texto }
                 ],
                 model: "llama-3.3-70b-versatile",
             });
             await sock.sendMessage(m.key.remoteJid, { text: completion.choices[0].message.content });
-        } catch (e) { console.log("Error en Groq"); }
+        } catch (e) { console.log("Error Groq"); }
     });
 }
 
