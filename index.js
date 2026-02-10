@@ -1,20 +1,23 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const http = require('http');
+const pino = require('pino');
 
-// Servidor para que Railway no mate el proceso
-http.createServer((req, res) => { res.end("Karla Viva"); }).listen(process.env.PORT || 8080);
+http.createServer((req, res) => { res.end("Karla Online"); }).listen(process.env.PORT || 8080);
 
 async function conectarWA() {
-    // 1. Usamos una carpeta de sesión que NUNCA hayamos usado antes
-    const { state, saveCreds } = await useMultiFileAuthState('sesion_nueva_vida_99');
+    // CAMBIAMOS EL NOMBRE DE LA SESIÓN OTRA VEZ
+    const { state, saveCreds } = await useMultiFileAuthState('sesion_definitiva_v5');
 
     const sock = makeWASocket({
-        auth: state,
-        // 2. Cambiamos la identidad del navegador (Esto salta el error 405)
-        browser: ["Karla Bot", "MacOS", "15.0.0"], 
-        syncFullHistory: false,
-        logger: require('pino')({ level: 'silent' })
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
+        },
+        // Cambiamos a Windows para variar la firma de conexión
+        browser: ["Windows", "Chrome", "110.0.0"],
+        printQRInTerminal: false,
+        logger: pino({ level: 'silent' })
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -23,21 +26,21 @@ async function conectarWA() {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.log("\n🚀 ¡LO LOGRAMOS! ESCANEA ESTE QR YA:");
+            console.log("\n🔥 ¡AQUÍ ESTÁ EL QR! ESCANEA RÁPIDO 🔥");
             qrcode.generate(qr, { small: true });
-            console.log("Asegúrate de tener el ZOOM alejado (Ctrl y -)\n");
         }
 
         if (connection === 'close') {
-            const code = lastDisconnect?.error?.output?.statusCode;
-            console.log("Cerrado con código:", code);
-            // Si es 405, esperamos un poco más para que WhatsApp nos perdone
-            const delay = code === 405 ? 20000 : 10000;
-            setTimeout(() => conectarWA(), delay);
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            console.log("Cerrado con código:", statusCode);
+            
+            // Si sigue saliendo 405, esperaremos 30 segundos (más tiempo)
+            const waitTime = statusCode === 405 ? 30000 : 10000;
+            console.log(`Reintentando en ${waitTime/1000} segundos...`);
+            setTimeout(() => conectarWA(), waitTime);
         } else if (connection === 'open') {
-            console.log("✅ KARLA ESTÁ CONECTADA!");
+            console.log("✅ ¡CONEXIÓN EXITOSA! Karla vive.");
         }
     });
 }
-
 conectarWA();
