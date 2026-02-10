@@ -2,10 +2,15 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const qrcode = require('qrcode-terminal');
 const http = require('http');
 
+// Servidor para Railway
 http.createServer((req, res) => { res.end("Karla Online"); }).listen(process.env.PORT || 8080);
 
 async function conectarWA() {
-    const { state, saveCreds } = await useMultiFileAuthState('sesion_final');
+    console.log("🛠️ Intentando generar nuevo código QR...");
+    
+    // Cambiamos el nombre de la carpeta para forzar un QR nuevo
+    const { state, saveCreds } = await useMultiFileAuthState('sesion_emergencia_v3');
+
     const sock = makeWASocket({
         auth: state,
         browser: ["Karla Bot", "Chrome", "1.0.0"],
@@ -18,20 +23,21 @@ async function conectarWA() {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.log("\n\n#########################################");
-            console.log("¡DETENTE! ESCANEA ESTE CÓDIGO AHORA:");
+            console.log("\n✅ ¡AQUÍ ESTÁ! ESCANEA RÁPIDO:");
             qrcode.generate(qr, { small: true });
-            console.log("#########################################\n\n");
+            console.log("Si no ves un cuadrado, aleja el zoom (Ctrl y -)\n");
         }
 
         if (connection === 'close') {
             const error = lastDisconnect?.error?.output?.statusCode;
-            // Si no es un cierre voluntario, esperamos 15 segundos (más tiempo para ti)
-            console.log("Esperando para reintentar... No cierres los logs.");
-            setTimeout(() => conectarWA(), 15000);
+            console.log("Conexión cerrada. Código:", error);
+            console.log("Reintentando en 10 segundos...");
+            setTimeout(() => conectarWA(), 10000);
         } else if (connection === 'open') {
             console.log("✅ ¡CONECTADO EXITOSAMENTE!");
         }
     });
 }
-conectarWA();
+
+conectarWA().catch(err => console.log("Error fatal:", err));
+
