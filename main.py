@@ -4,16 +4,35 @@ import requests
 
 app = Flask(__name__)
 
-# Aquí el servidor buscará tu llave de forma segura
+# Configuración de la API Key desde las variables de Railway
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 MODELO = "llama-3.3-70b-versatile"
 
-@app.route('/karla', methods=['POST'])
+@app.route('/karla', methods=['GET', 'POST'])
 def chat():
-    data = request.json
-    pregunta_cliente = data.get("message", "")
+    pregunta_cliente = ""
 
-    prompt_sistema = "Eres Karla de Neo Pisk 🐯. Responde ruda, directa y breve (máximo 15 palabras). Cierra con: https://t.me/NeoPisk_bot"
+    # 1. Intentar obtener el mensaje si viene por POST (JSON)
+    if request.method == 'POST':
+        if request.is_json:
+            data = request.json
+            pregunta_cliente = data.get("message", "")
+        else:
+            pregunta_cliente = request.form.get("message", "")
+
+    # 2. Intentar obtener el mensaje si viene por GET (en la URL)
+    if not pregunta_cliente:
+        pregunta_cliente = request.args.get("message", "")
+
+    # Si no hay mensaje, responder algo por defecto
+    if not pregunta_cliente:
+        return jsonify({"reply": "Habla socio, no me enviaste ningún mensaje. 🐯"})
+
+    # 3. Configuración del prompt rudo de Karla
+    prompt_sistema = (
+        "Eres Karla de Neo Pisk 🐯. Responde de forma ruda, directa y muy breve (máximo 15 palabras). "
+        "No des explicaciones largas. Cierra siempre con: https://t.me/NeoPisk_bot"
+    )
 
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -30,11 +49,16 @@ def chat():
     }
 
     try:
+        # 4. Petición a la Inteligencia Artificial de Groq
         response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
-        respuesta_ia = response.json()['choices'][0]['message']['content']
+        response_data = response.json()
+        respuesta_ia = response_data['choices'][0]['message']['content']
         return jsonify({"reply": respuesta_ia})
-    except:
-        return jsonify({"reply": "Habla socio, entra a Telegram: https://t.me/NeoPisk_bot"})
+    except Exception as e:
+        # Por si falla la API Key o la conexión
+        return jsonify({"reply": "Tengo un problema en el cerebro. Háblame por aquí: https://t.me/NeoPisk_bot"})
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    # Railway usa el puerto 8080 por defecto
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
