@@ -1,23 +1,19 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const http = require('http');
-const pino = require('pino');
 
-http.createServer((req, res) => { res.end("Karla Online"); }).listen(process.env.PORT || 8080);
+http.createServer((req, res) => { res.end("Karla Final"); }).listen(process.env.PORT || 8080);
 
 async function conectarWA() {
-    // CAMBIAMOS EL NOMBRE DE LA SESIÓN OTRA VEZ
-    const { state, saveCreds } = await useMultiFileAuthState('sesion_definitiva_v5');
+    // 1. Usamos un nombre de carpeta que NUNCA hayamos usado (v999)
+    const { state, saveCreds } = await useMultiFileAuthState('sesion_final_de_verdad_v999');
 
     const sock = makeWASocket({
-        auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
-        },
-        // Cambiamos a Windows para variar la firma de conexión
-        browser: ["Windows", "Chrome", "110.0.0"],
-        printQRInTerminal: false,
-        logger: pino({ level: 'silent' })
+        auth: state,
+        // 2. IMPORTANTE: Cambiamos a una identidad de Tablet Android
+        // Esto a veces salta los bloqueos de "Navegador" (405)
+        browser: ["Android (Tablet)", "Chrome", "110.0.0"], 
+        logger: require('pino')({ level: 'silent' })
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -26,20 +22,20 @@ async function conectarWA() {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.log("\n🔥 ¡AQUÍ ESTÁ EL QR! ESCANEA RÁPIDO 🔥");
+            console.log("\n\n*****************************************");
+            console.log("¡ÚLTIMO INTENTO! ESCANEA ESTE QR:");
             qrcode.generate(qr, { small: true });
+            console.log("*****************************************\n\n");
         }
 
         if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
-            console.log("Cerrado con código:", statusCode);
+            console.log("Error final:", statusCode);
             
-            // Si sigue saliendo 405, esperaremos 30 segundos (más tiempo)
-            const waitTime = statusCode === 405 ? 30000 : 10000;
-            console.log(`Reintentando en ${waitTime/1000} segundos...`);
-            setTimeout(() => conectarWA(), waitTime);
+            // Si falla, esperamos 1 minuto para no saturar
+            setTimeout(() => conectarWA(), 60000);
         } else if (connection === 'open') {
-            console.log("✅ ¡CONEXIÓN EXITOSA! Karla vive.");
+            console.log("✅ ¡INCREÍBLE! CONECTADO.");
         }
     });
 }
