@@ -1,9 +1,9 @@
 const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const Groq = require('groq-sdk');
-const http = require('http'); // Para que Railway no lo apague
+const http = require('http');
 
-// Crear un servidor básico para que Railway vea actividad
+// Servidor para Railway
 http.createServer((req, res) => {
     res.write("Karla está viva");
     res.end();
@@ -13,9 +13,10 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 async function conectarWA() {
     const { state, saveCreds } = await useMultiFileAuthState('sesion_auth');
+    
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
+        // Eliminamos la opción que daba el aviso
         browser: ["Karla Bot", "Chrome", "1.0.0"],
         logger: require('pino')({ level: 'silent' })
     });
@@ -24,11 +25,25 @@ async function conectarWA() {
 
     sock.ev.on('connection.update', (update) => {
         const { connection, qr } = update;
+        
+        // CUANDO APAREZCA EL QR, LO IMPRIMIMOS CON FUERZA
         if (qr) {
-            console.log("⬇️ ESCANEA ESTE QR EN TU WHATSAPP ⬇️");
+            console.log("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"); // Espacios para limpiar
+            console.log("========================================");
+            console.log("⬇️ ESCANEA ESTE QR AHORA MISMO ⬇️");
+            console.log("========================================");
+            
+            // Forzamos el renderizado del QR
             qrcode.generate(qr, { small: true });
+            
+            console.log("========================================");
+            console.log("Si el QR se ve mal, aleja el zoom (Ctrl -)");
+            console.log("========================================\n\n");
         }
-        if (connection === 'open') console.log("✅ KARLA ESTÁ VIVA EN TU WHATSAPP");
+        
+        if (connection === 'open') {
+            console.log("✅ ¡VICTORIA! KARLA ESTÁ VINCULADA.");
+        }
     });
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
@@ -40,7 +55,7 @@ async function conectarWA() {
         try {
             const chatCompletion = await groq.chat.completions.create({
                 messages: [
-                    { role: "system", content: "Eres Karla de Neo Pisk 🐯. Responde ruda, directa y breve (máximo 15 palabras). Cierra con: https://t.me/NeoPisk_bot" },
+                    { role: "system", content: "Eres Karla de Neo Pisk 🐯. Responde ruda y breve (máximo 15 palabras). Cierra con: https://t.me/NeoPisk_bot" },
                     { role: "user", content: textoRecibido }
                 ],
                 model: "llama-3.3-70b-versatile",
